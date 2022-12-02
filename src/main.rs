@@ -14,19 +14,15 @@ use uefi::table::boot::BootServices;
 use uefi::Result;
 
 struct Buffer<'a> {
-    width: usize,
-    height: usize,
+    dims: (usize, usize),
+    dest: (usize, usize),
     pixels: &'a [BltPixel],
 }
 
 impl<'a> Buffer<'a> {
     /// Create a new `Buffer`.
-    fn new(width: usize, height: usize, pixels: &'a [BltPixel]) -> Self {
-        Buffer {
-            width,
-            height,
-            pixels,
-        }
+    fn new(dims: (usize, usize), dest: (usize, usize), pixels: &'a [BltPixel]) -> Self {
+        Buffer { dims, dest, pixels }
     }
 
     /// Blit the buffer to the framebuffer.
@@ -34,8 +30,8 @@ impl<'a> Buffer<'a> {
         gop.blt(BltOp::BufferToVideo {
             buffer: self.pixels,
             src: BltRegion::Full,
-            dest: (0, 0),
-            dims: (self.width, self.height),
+            dest: self.dest,
+            dims: self.dims,
         })
     }
 }
@@ -64,15 +60,12 @@ fn rick(bt: &BootServices) -> Result {
     let center_x = width / 2;
     let center_y = height / 2;
 
-    let frame_size_x = 320;
-    let frame_size_y = 240;
-
-    let start_x = center_x - frame_size_x / 2;
-    let start_y = center_y - frame_size_y / 2;
+    let start_x = center_x - 320 / 2;
+    let start_y = center_y - 240 / 2;
 
     for (i, frame) in data.chunks(76800).enumerate() {
         info!("Processing frame {}, size {}", i, frame.len());
-        let buffer = Buffer::new(320, 240, frame);
+        let buffer = Buffer::new((320, 240), (start_x, start_y), frame);
         buffer.blit(&mut gop)?;
         bt.stall(40_000);
     }
