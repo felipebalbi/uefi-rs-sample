@@ -1,0 +1,9 @@
+[package]
+name = "hello-efi-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = "0.4"
+uefi = "0.18"
+uefi-services = "0.15"
