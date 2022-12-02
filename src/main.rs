@@ -5,11 +5,9 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use core::mem;
 use log::info;
 use uefi::prelude::*;
 use uefi::proto::console::gop::{BltOp, BltPixel, BltRegion, GraphicsOutput};
-use uefi::proto::rng::Rng;
 use uefi::table::boot::BootServices;
 use uefi::Result;
 
@@ -34,12 +32,6 @@ impl<'a> Buffer<'a> {
             dims: self.dims,
         })
     }
-}
-
-fn get_random_usize(rng: &mut Rng) -> usize {
-    let mut buf = [0; mem::size_of::<usize>()];
-    rng.get_rng(None, &mut buf).expect("get_rng failed");
-    usize::from_le_bytes(buf)
 }
 
 fn rick(bt: &BootServices) -> Result {
