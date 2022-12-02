@@ -52,12 +52,15 @@ fn rick(bt: &BootServices) -> Result {
     let center_x = width / 2;
     let center_y = height / 2;
 
-    let start_x = center_x - 320 / 2;
-    let start_y = center_y - 240 / 2;
+    const FRAME_WIDTH: usize = 320;
+    const FRAME_HEIGHT: usize = 240;
 
-    for (i, frame) in data.chunks(76800).enumerate() {
+    let start_x = center_x - FRAME_WIDTH / 2;
+    let start_y = center_y - FRAME_HEIGHT / 2;
+
+    for (i, frame) in data.chunks(FRAME_WIDTH * FRAME_HEIGHT).enumerate() {
         info!("Processing frame {}, size {}", i, frame.len());
-        let buffer = Buffer::new((320, 240), (start_x, start_y), frame);
+        let buffer = Buffer::new((FRAME_WIDTH, FRAME_HEIGHT), (start_x, start_y), frame);
         buffer.blit(&mut gop)?;
         bt.stall(40_000);
     }
