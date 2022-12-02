@@ -11,7 +11,7 @@ qemu-system-x86_64 -nodefaults						\
 		   -device virtio-rng-pci				\
 		   -machine q35						\
 		   -smp 4						\
-		   -m 256M						\
+		   -m 1024M						\
 		   -vga std						\
 		   --enable-kvm						\
 		   -device isa-debug-exit,iobase=0xf4,iosize=0x04	\

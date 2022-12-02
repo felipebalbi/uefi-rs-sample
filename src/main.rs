@@ -4,13 +4,41 @@
 
 extern crate alloc;
 
+use alloc::vec::Vec;
 use core::mem;
 use log::info;
 use uefi::prelude::*;
-use uefi::proto::console::gop::{BltOp, BltPixel, GraphicsOutput};
+use uefi::proto::console::gop::{BltOp, BltPixel, BltRegion, GraphicsOutput};
 use uefi::proto::rng::Rng;
 use uefi::table::boot::BootServices;
 use uefi::Result;
+
+struct Buffer<'a> {
+    width: usize,
+    height: usize,
+    pixels: &'a [BltPixel],
+}
+
+impl<'a> Buffer<'a> {
+    /// Create a new `Buffer`.
+    fn new(width: usize, height: usize, pixels: &'a [BltPixel]) -> Self {
+        Buffer {
+            width,
+            height,
+            pixels,
+        }
+    }
+
+    /// Blit the buffer to the framebuffer.
+    fn blit(&self, gop: &mut GraphicsOutput) -> Result {
+        gop.blt(BltOp::BufferToVideo {
+            buffer: self.pixels,
+            src: BltRegion::Full,
+            dest: (0, 0),
+            dims: (self.width, self.height),
+        })
+    }
+}
 
 fn get_random_usize(rng: &mut Rng) -> usize {
     let mut buf = [0; mem::size_of::<usize>()];
@@ -18,47 +46,38 @@ fn get_random_usize(rng: &mut Rng) -> usize {
     usize::from_le_bytes(buf)
 }
 
-fn draw_random_rectangles(bt: &BootServices) -> Result {
+fn rick(bt: &BootServices) -> Result {
+    let data = include_bytes!("video.bin")
+        .chunks(3)
+        .map(|chunk| BltPixel::new(chunk[0], chunk[1], chunk[2]))
+        .collect::<Vec<_>>();
+
     // Open graphics output protocol.
     let gop_handle = bt.get_handle_for_protocol::<GraphicsOutput>()?;
     let mut gop = bt.open_protocol_exclusive::<GraphicsOutput>(gop_handle)?;
 
-    // Open random number generator protocol.
-    let rng_handle = bt.get_handle_for_protocol::<Rng>()?;
-    let mut rng = bt.open_protocol_exclusive::<Rng>(rng_handle)?;
-
     // Get screen resolution
     let (width, height) = gop.current_mode_info().resolution();
 
-    // Draw randomly colored squares to random locations on the screen
-    loop {
-        // First corner of a rectangle
-        let mut x = get_random_usize(&mut rng) % width;
-        let mut y = get_random_usize(&mut rng) % height;
-        let mut size = get_random_usize(&mut rng) % 200;
+    info!("Current resolution is {}x{}", width, height);
 
-        if size == 0 {
-            size = 1;
-        }
+    let center_x = width / 2;
+    let center_y = height / 2;
 
-        if x + size > width {
-            x = x - size;
-        }
+    let frame_size_x = 320;
+    let frame_size_y = 240;
 
-        if y + size > height {
-            y = y - size;
-        }
+    let start_x = center_x - frame_size_x / 2;
+    let start_y = center_y - frame_size_y / 2;
 
-        let red = get_random_usize(&mut rng) % 255;
-        let green = get_random_usize(&mut rng) % 255;
-        let blue = get_random_usize(&mut rng) % 255;
-
-        let color = BltPixel::new(red as u8, green as u8, blue as u8);
-        let dest = (x, y);
-        let dims = (size, size);
-
-        gop.blt(BltOp::VideoFill { color, dest, dims })?;
+    for (i, frame) in data.chunks(76800).enumerate() {
+        info!("Processing frame {}, size {}", i, frame.len());
+        let buffer = Buffer::new(320, 240, frame);
+        buffer.blit(&mut gop)?;
+        bt.stall(40_000);
     }
+
+    Ok(())
 }
 
 #[entry]
@@ -67,7 +86,7 @@ fn main(_image_handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     info!("Hello World!");
 
     let bt = system_table.boot_services();
-    draw_random_rectangles(bt).unwrap();
+    rick(bt).unwrap();
 
     Status::SUCCESS
 }
