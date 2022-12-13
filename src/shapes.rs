@@ -1,4 +1,4 @@
-use super::Buffer;
+use crate::buffer::Buffer;
 use micromath::{
     vector::{F32x2, Vector},
     F32Ext,
