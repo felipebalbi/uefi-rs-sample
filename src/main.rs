@@ -4,60 +4,191 @@
 
 extern crate alloc;
 
-use core::mem;
+use alloc::vec;
+use alloc::vec::Vec;
 use log::info;
-use uefi::prelude::*;
-use uefi::proto::console::gop::{BltOp, BltPixel, GraphicsOutput};
-use uefi::proto::rng::Rng;
-use uefi::table::boot::BootServices;
-use uefi::Result;
+use micromath::{
+    vector::{F32x2, Vector},
+    F32Ext,
+};
+use uefi::{
+    prelude::*,
+    proto::console::gop::{BltOp, BltPixel, BltRegion, GraphicsOutput},
+    table::boot::BootServices,
+    Result,
+};
 
-fn get_random_usize(rng: &mut Rng) -> usize {
-    let mut buf = [0; mem::size_of::<usize>()];
-    rng.get_rng(None, &mut buf).expect("get_rng failed");
-    usize::from_le_bytes(buf)
+struct Buffer {
+    width: usize,
+    height: usize,
+    pixels: Vec<BltPixel>,
 }
 
-fn draw_random_rectangles(bt: &BootServices) -> Result {
+impl Buffer {
+    fn new(width: usize, height: usize) -> Self {
+        Self {
+            width,
+            height,
+            pixels: vec![BltPixel::new(0, 0, 0); width * height],
+        }
+    }
+
+    fn set_pixel(&mut self, x: usize, y: usize, color: BltPixel) {
+        if let Some(pixel) = self.pixels.get_mut(y * self.width + x) {
+            pixel.red = color.red;
+            pixel.green = color.green;
+            pixel.blue = color.blue;
+        }
+    }
+
+    fn blit(&self, gop: &mut GraphicsOutput) -> Result {
+        gop.blt(BltOp::BufferToVideo {
+            buffer: &self.pixels,
+            src: BltRegion::Full,
+            dest: (0, 0),
+            dims: (self.width, self.height),
+        })
+    }
+}
+
+trait Widget {
+    fn render(&self, buffer: &mut Buffer);
+}
+
+pub struct Square {
+    size: f32,
+    position: F32x2,
+    color: BltPixel,
+}
+
+impl Square {
+    pub fn new(size: f32, position: F32x2, color: BltPixel) -> Self {
+        Self {
+            size,
+            position,
+            color,
+        }
+    }
+}
+
+impl Widget for Square {
+    fn render(&self, buffer: &mut Buffer) {
+        let begin_x = self.position.x as usize;
+        let end_x = (self.position.x + self.size) as usize;
+
+        for x in begin_x..end_x {
+            let begin_y = self.position.y as usize;
+            let end_y = (self.position.y + self.size) as usize;
+
+            for y in begin_y..end_y {
+                buffer.set_pixel(x, y, self.color);
+            }
+        }
+    }
+}
+
+pub struct Rectangle {
+    width: f32,
+    height: f32,
+    position: F32x2,
+    color: BltPixel,
+}
+
+impl Rectangle {
+    pub fn new(width: f32, height: f32, position: F32x2, color: BltPixel) -> Self {
+        Self {
+            width,
+            height,
+            position,
+            color,
+        }
+    }
+}
+
+impl Widget for Rectangle {
+    fn render(&self, buffer: &mut Buffer) {
+        let begin_x = self.position.x as usize;
+        let end_x = (self.position.x + self.width) as usize;
+
+        for x in begin_x..end_x {
+            let begin_y = self.position.y as usize;
+            let end_y = (self.position.y + self.height) as usize;
+
+            for y in begin_y..end_y {
+                buffer.set_pixel(x, y, self.color);
+            }
+        }
+    }
+}
+
+pub struct Circle {
+    radius: f32,
+    position: F32x2,
+    color: BltPixel,
+}
+
+impl Circle {
+    pub fn new(radius: f32, position: F32x2, color: BltPixel) -> Self {
+        Self {
+            radius,
+            position,
+            color,
+        }
+    }
+}
+
+impl Widget for Circle {
+    fn render(&self, buffer: &mut Buffer) {
+        let begin_x = (self.position.x - self.radius) as usize;
+        let end_x = (self.position.x + self.radius) as usize;
+
+        for x in begin_x..end_x {
+            let begin_y = (self.position.y - self.radius) as usize;
+            let end_y = (self.position.y + self.radius) as usize;
+
+            for y in begin_y..end_y {
+                let pixel_position = F32x2 {
+                    x: x as f32,
+                    y: y as f32,
+                };
+
+                if self.position.distance(pixel_position).abs() <= self.radius {
+                    buffer.set_pixel(x, y, self.color);
+                }
+            }
+        }
+    }
+}
+
+fn draw(bt: &BootServices) -> Result {
     // Open graphics output protocol.
     let gop_handle = bt.get_handle_for_protocol::<GraphicsOutput>()?;
     let mut gop = bt.open_protocol_exclusive::<GraphicsOutput>(gop_handle)?;
 
-    // Open random number generator protocol.
-    let rng_handle = bt.get_handle_for_protocol::<Rng>()?;
-    let mut rng = bt.open_protocol_exclusive::<Rng>(rng_handle)?;
-
     // Get screen resolution
     let (width, height) = gop.current_mode_info().resolution();
 
-    // Draw randomly colored squares to random locations on the screen
+    let mut current_buffer = 0;
+    let mut buf1 = Buffer::new(width, height);
+    let mut buf2 = Buffer::new(width, height);
+
+    let background_rect = Rectangle::new(
+        width as f32,
+        height as f32,
+        F32x2::default(),
+        BltPixel::new(215, 215, 215),
+    );
+    background_rect.render(&mut buf1);
+    background_rect.render(&mut buf2);
+
     loop {
-        // First corner of a rectangle
-        let mut x = get_random_usize(&mut rng) % width;
-        let mut y = get_random_usize(&mut rng) % height;
-        let mut size = get_random_usize(&mut rng) % 200;
-
-        if size == 0 {
-            size = 1;
+        if current_buffer == 0 {
+            render(height, &mut buf1, &mut gop)?;
+            current_buffer = 1;
+        } else {
+            render(height, &mut buf1, &mut gop)?;
+            current_buffer = 0;
         }
-
-        if x + size > width {
-            x = x - size;
-        }
-
-        if y + size > height {
-            y = y - size;
-        }
-
-        let red = get_random_usize(&mut rng) % 255;
-        let green = get_random_usize(&mut rng) % 255;
-        let blue = get_random_usize(&mut rng) % 255;
-
-        let color = BltPixel::new(red as u8, green as u8, blue as u8);
-        let dest = (x, y);
-        let dims = (size, size);
-
-        gop.blt(BltOp::VideoFill { color, dest, dims })?;
     }
 }
 
@@ -67,7 +198,42 @@ fn main(_image_handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     info!("Hello World!");
 
     let bt = system_table.boot_services();
-    draw_random_rectangles(bt).unwrap();
+    draw(bt).unwrap();
 
     Status::SUCCESS
+}
+
+fn render(height: usize, buf: &mut Buffer, gop: &mut GraphicsOutput) -> Result {
+    let rect = Rectangle::new(
+        50.0,
+        100.0,
+        F32x2 {
+            x: 100.0,
+            y: height as f32 / 2.0,
+        },
+        BltPixel::new(255, 0, 0),
+    );
+    rect.render(buf);
+
+    let square = Square::new(
+        50.0,
+        F32x2 {
+            x: 200.0,
+            y: height as f32 / 2.0,
+        },
+        BltPixel::new(0, 255, 0),
+    );
+    square.render(buf);
+
+    let circle = Circle::new(
+        50.0,
+        F32x2 {
+            x: 400.0,
+            y: height as f32 / 2.0,
+        },
+        BltPixel::new(0, 0, 255),
+    );
+    circle.render(buf);
+
+    buf.blit(gop)
 }
