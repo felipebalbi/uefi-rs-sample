@@ -6,7 +6,10 @@ extern crate alloc;
 
 use log::info;
 use micromath::vector::F32x2;
-use uefi_rs_sample::{Buffer, Circle, Rectangle, Shape, Square};
+use uefi_rs_sample::{
+    shapes::{Circle, Rectangle, Shape, Square},
+    Buffer,
+};
 
 use uefi::{
     prelude::*,
