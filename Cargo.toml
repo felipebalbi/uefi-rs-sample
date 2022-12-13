@@ -1,5 +1,5 @@
 [package]
-name = "hello-efi-rs"
+name = "uefi-rs-sample"
 version = "0.1.0"
 edition = "2021"
 
