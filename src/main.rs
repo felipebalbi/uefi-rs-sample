@@ -7,7 +7,10 @@ extern crate alloc;
 use alloc::vec::Vec;
 use log::info;
 use uefi::prelude::*;
-use uefi::proto::console::gop::{BltOp, BltPixel, BltRegion, GraphicsOutput};
+use uefi::proto::console::{
+    gop::{BltOp, BltPixel, BltRegion, GraphicsOutput},
+    text::{Input, Key},
+};
 use uefi::table::boot::BootServices;
 use uefi::Result;
 
@@ -44,6 +47,10 @@ fn rick(bt: &BootServices) -> Result {
     let gop_handle = bt.get_handle_for_protocol::<GraphicsOutput>()?;
     let mut gop = bt.open_protocol_exclusive::<GraphicsOutput>(gop_handle)?;
 
+    // Open text input protocol
+    let text_handle = bt.get_handle_for_protocol::<Input>()?;
+    let mut text = bt.open_protocol_exclusive::<Input>(text_handle)?;
+
     // Get screen resolution
     let (width, height) = gop.current_mode_info().resolution();
 
@@ -63,6 +70,41 @@ fn rick(bt: &BootServices) -> Result {
         let buffer = Buffer::new((FRAME_WIDTH, FRAME_HEIGHT), (start_x, start_y), frame);
         buffer.blit(&mut gop)?;
         bt.stall(40_000);
+    }
+
+    loop {
+        let key = text.read_key()?;
+
+        match key {
+            Some(k) => match k {
+                Key::Printable(c) => {
+                    let c: char = c.into();
+
+                    match c {
+                        'w' => {
+                            info!("Up");
+                        }
+                        'a' => {
+                            info!("Left");
+                        }
+                        's' => {
+                            info!("Down");
+                        }
+                        'd' => {
+                            info!("Right");
+                        }
+                        ' ' => {
+                            info!("Fire");
+                        }
+                        _ => {}
+                    }
+                }
+                Key::Special(s) => {
+                    info!("Pressed '{:?}'", s);
+                }
+            },
+            _ => {}
+        }
     }
 
     Ok(())
