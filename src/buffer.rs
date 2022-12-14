@@ -1,13 +1,10 @@
 use alloc::vec;
 use alloc::vec::Vec;
-use uefi::{
-    proto::console::gop::{BltOp, BltPixel, BltRegion, GraphicsOutput},
-    Result,
-};
+use uefi::proto::console::gop::BltPixel;
 
 pub struct Buffer {
-    width: usize,
-    height: usize,
+    pub width: usize,
+    pub height: usize,
     pixels: Vec<BltPixel>,
 }
 
@@ -28,12 +25,7 @@ impl Buffer {
         }
     }
 
-    pub fn blit(&self, gop: &mut GraphicsOutput) -> Result {
-        gop.blt(BltOp::BufferToVideo {
-            buffer: &self.pixels,
-            src: BltRegion::Full,
-            dest: (0, 0),
-            dims: (self.width, self.height),
-        })
+    pub fn get(&self) -> &Vec<BltPixel> {
+        &self.pixels
     }
 }

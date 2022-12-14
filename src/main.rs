@@ -6,16 +6,15 @@ extern crate alloc;
 
 use log::info;
 use micromath::vector::F32x2;
+use uefi::{
+    prelude::*,
+    proto::console::gop::{BltOp, BltPixel, BltRegion, GraphicsOutput},
+    table::boot::BootServices,
+    Result,
+};
 use uefi_rs_sample::{
     buffer::Buffer,
     shapes::{Circle, Rectangle, Shape, Square},
-};
-
-use uefi::{
-    prelude::*,
-    proto::console::gop::{BltPixel, GraphicsOutput},
-    table::boot::BootServices,
-    Result,
 };
 
 fn draw(bt: &BootServices) -> Result {
@@ -41,10 +40,10 @@ fn draw(bt: &BootServices) -> Result {
 
     loop {
         if current_buffer == 0 {
-            render(height, &mut buf1, &mut gop)?;
+            render(&mut buf1, &mut gop)?;
             current_buffer = 1;
         } else {
-            render(height, &mut buf1, &mut gop)?;
+            render(&mut buf1, &mut gop)?;
             current_buffer = 0;
         }
     }
@@ -61,13 +60,13 @@ fn main(_image_handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     Status::SUCCESS
 }
 
-fn render(height: usize, buf: &mut Buffer, gop: &mut GraphicsOutput) -> Result {
+fn render(buf: &mut Buffer, gop: &mut GraphicsOutput) -> Result {
     let rect = Rectangle::new(
         50.0,
         100.0,
         F32x2 {
             x: 100.0,
-            y: height as f32 / 2.0,
+            y: buf.height as f32 / 2.0,
         },
         BltPixel::new(255, 0, 0),
     );
@@ -77,7 +76,7 @@ fn render(height: usize, buf: &mut Buffer, gop: &mut GraphicsOutput) -> Result {
         50.0,
         F32x2 {
             x: 200.0,
-            y: height as f32 / 2.0,
+            y: buf.height as f32 / 2.0,
         },
         BltPixel::new(0, 255, 0),
     );
@@ -87,11 +86,16 @@ fn render(height: usize, buf: &mut Buffer, gop: &mut GraphicsOutput) -> Result {
         50.0,
         F32x2 {
             x: 400.0,
-            y: height as f32 / 2.0,
+            y: buf.height as f32 / 2.0,
         },
         BltPixel::new(0, 0, 255),
     );
     circle.render(buf);
 
-    buf.blit(gop)
+    gop.blt(BltOp::BufferToVideo {
+        buffer: buf.get(),
+        src: BltRegion::Full,
+        dest: (0, 0),
+        dims: (buf.width, buf.height),
+    })
 }
