@@ -5,7 +5,7 @@ VARS=/usr/share/OVMF/x64/OVMF_VARS.fd
 
 cargo build --target x86_64-unknown-uefi
 mkdir -p esp/efi/boot
-cp target/x86_64-unknown-uefi/debug/hello-efi-rs.efi esp/efi/boot/bootx64.efi
+cp target/x86_64-unknown-uefi/debug/uefi-rs-sample.efi esp/efi/boot/bootx64.efi
 
 qemu-system-x86_64 -nodefaults						\
 		   -device virtio-rng-pci				\

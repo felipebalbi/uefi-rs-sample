@@ -29,3 +29,26 @@ impl Buffer {
         &self.pixels
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::mem::size_of;
+
+    #[test]
+    fn buffer_defaults_to_black() {
+        let buffer = Buffer::new(100, 200);
+
+        assert_eq!(buffer.width, 100);
+        assert_eq!(buffer.height, 200);
+        assert_eq!(size_of::<Buffer>(), 100 * 200 * size_of::<BltPixel>());
+
+        let pixels = buffer.pixels;
+
+        for pixel in pixels.into_iter() {
+            assert_eq!(pixel.red, 0);
+            assert_eq!(pixel.green, 0);
+            assert_eq!(pixel.blue, 0);
+        }
+    }
+}
